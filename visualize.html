@@ -1,0 +1,342 @@
+<html>
+<head>
+<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7" crossorigin="anonymous">
+<link rel="stylesheet" href="style.css">
+<script src="https://code.jquery.com/jquery-2.2.4.min.js" integrity="sha256-BbhdlvQf/xTY9gja0Dq3HiwQF8LaCRTXxZKRutelT44=" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/3.5.17/d3.min.js"></script>
+<script>
+
+var userAccessToken;
+
+function statusChangeCallback(response) {
+    userAccessToken = response.authResponse.accessToken;
+    if (response.status === 'connected') {
+      // Logged into your app and Facebook.
+      testAPI();
+    } else if (response.status === 'not_authorized') {
+      // The person is logged into Facebook, but not your app.
+      document.getElementById('status').innerHTML = 'Please log ' +
+        'into this app.';
+    } else {
+      // The person is not logged into Facebook, so we're not sure if
+      // they are logged into this app or not.
+      document.getElementById('status').innerHTML = 'Please log ' +
+        'into Facebook.';
+    }
+  }
+
+  // This function is called when someone finishes with the Login
+  // Button.
+  function checkLoginState() {
+    FB.getLoginStatus(function(response) {
+      statusChangeCallback(response);
+    });
+  }
+
+  window.fbAsyncInit = function() {
+  FB.init({
+    appId      : '500498403487320',
+    cookie     : true,  // enable cookies to allow the server to access 
+                        // the session
+    xfbml      : true,  // parse social plugins on this page
+    version    : 'v2.5' // use graph api 'version 2.5
+  });
+      
+    FB.Event.subscribe('auth.logout', function (response) {
+          document.getElementById("graph").style.display = 'none';
+      });
+
+  };
+
+  // Load the SDK asynchronously
+  (function(d, s, id) {
+    var js, fjs = d.getElementsByTagName(s)[0];
+    if (d.getElementById(id)) return;
+    js = d.createElement(s); js.id = id;
+    js.src = "//connect.facebook.net/en_US/sdk.js";
+    fjs.parentNode.insertBefore(js, fjs);
+  }(document, 'script', 'facebook-jssdk'));
+
+  // Here we run a very simple test of the Graph API after login is
+  // successful.  See statusChangeCallback() for when this call is made.
+  function testAPI() {
+    console.log('Welcome!  Fetching your information.... ');
+    FB.api('/me', function(response) {
+      console.log('Successful login for: ' + response.name);
+    });
+  }
+    
+    function getData(){
+        
+         var myurl="https://graph.facebook.com/me?fields=name,picture"+"&access_token="+userAccessToken;
+         var myData;
+         var friendData;
+        $.ajax({
+	   type: 'GET',
+		url: myurl,
+		async: false,
+		contentType: "application/json",
+		dataType: 'jsonp',
+        success: function(userData){
+            var data = JSON.stringify(userData);
+            myData = JSON.parse(data);
+            console.log(myData);
+          }
+        });
+        
+        
+        var url="https://graph.facebook.com/me/taggable_friends?fields=name,picture"+"&access_token="+userAccessToken;
+       
+        $.ajax({
+	   type: 'GET',
+		url: url,
+		async: false,
+		contentType: "application/json",
+		dataType: 'jsonp',
+        //Parse the received json data to create a well formatted json object
+        success: function(userData){
+            var data = JSON.stringify(userData);
+            friendData = JSON.parse(data);
+            console.log(friendData);
+           
+                 var friend = [];
+        for (var i = 0; i < friendData.data.length ; i++) {
+            friend.push({
+            name: friendData.data[i].name,
+            img: friendData.data[i].picture.data.url,
+            size: 2000
+        });
+        }
+        
+        var visualData = {};
+        visualData['name'] = myData.name;
+        visualData['img'] = myData.picture.data.url;
+        visualData['size'] = 2000;
+        visualData['children'] = friend;
+        
+        console.log(visualData);
+        var number = 1;
+        display(visualData,number);
+          
+    }});
+}
+    
+function display(visualData,num){
+
+// Function to initialize the force layout
+   var width = 480,
+    height = 500,
+    root;
+
+var force = d3.layout.force()
+    .linkDistance(200)
+    .charge(-120)
+    .gravity(.05)
+    .size([width, height])
+    .on("tick", tick);
+var svg;
+if(num==1){
+     svg = d3.select("svg")
+    .attr("width", width)
+    .attr("height", height);
+
+
+} else if(num==2){
+     svg = d3.select("#rightContainer").append("svg:svg")
+    .attr("width", width)
+    .attr("height", height);
+    
+}  
+    
+var link = svg.selectAll(".link"),
+    node = svg.selectAll(".node");
+
+    root = visualData;
+    update();
+    
+    function update() {
+  var nodes = flatten(root),
+      links = d3.layout.tree().links(nodes);
+
+  // Restart the force layout.
+  force
+      .nodes(nodes)
+      .links(links)
+      .start();
+
+  // Update links.
+  link = link.data(links, function(d) { return d.target.id; });
+
+  link.exit().remove();
+
+  link.enter().insert("line", ".node")
+      .attr("class", "link");
+
+  // Update nodes.
+  node = node.data(nodes, function(d) { return d.id; });
+
+  node.exit().remove();
+
+  var nodeEnter = node.enter().append("g")
+      .attr("class", "node")
+      .on("click", click)
+      .call(force.drag);
+
+  nodeEnter.append("circle")
+      .attr("r", function(d) { return Math.sqrt(d.size) / 10 || 4.5; });
+      
+    
+          
+ if(num==1){
+
+  nodeEnter.append("svg:title")
+      .text(function(d) { return d.name; });
+
+  var images = nodeEnter.append("svg:image")
+        .attr("xlink:href",  function(d) { return d.img;})
+        .attr("x", function(d) { return -25;})
+        .attr("y", function(d) { return -25;})
+        .attr("height", 50)
+        .attr("width", 50)
+        .attr("clip-path", "url(#clip)");
+       
+  
+  // make the image grow a little on mouse over and add the text details on click
+  var setEvents = images
+          .on( 'click', function (d) {
+              d3.select("h1").html(d.hero); 
+              d3.select("h2").html(d.name); 
+              d3.select("h3").html ("Take me to " + "<a href='" + d.link + "' >"  + d.hero + " web page ⇢"+ "</a>" ); 
+           })
+
+  }
+if(num ==2){
+    nodeEnter.append("text")
+      .attr("dy", ".35em")
+      .text(function(d) { return d.name; });
+}
+  
+  node.select("circle")
+      .style("fill", color);
+}
+
+function tick() {
+  link.attr("x1", function(d) { return d.source.x; })
+      .attr("y1", function(d) { return d.source.y; })
+      .attr("x2", function(d) { return d.target.x; })
+      .attr("y2", function(d) { return d.target.y; });
+
+  node.attr("transform", function(d) { return "translate(" + d.x + "," + d.y + ")"; });
+}
+
+function color(d) {
+  return d._children ? "#3182bd" // collapsed package
+      : d.children ? "#c6dbef" // expanded package
+      : "#fd8d3c"; // leaf node
+}
+
+// Toggle children on click.
+function click(d) {
+  if (d3.event.defaultPrevented) return; // ignore drag
+  if (d.children) {
+    d._children = d.children;
+    d.children = null;
+  } else {
+    d.children = d._children;
+    d._children = null;
+  }
+  update();
+}
+
+// Returns a list of all nodes under the root.
+function flatten(root) {
+  var nodes = [], i = 0;
+
+  function recurse(node) {
+    if (node.children) node.children.forEach(recurse);
+    if (!node.id) node.id = ++i;
+    nodes.push(node);
+  }
+
+  recurse(root);
+  return nodes;
+}
+ document.getElementById("graph").style.display = 'block';
+}
+    
+var json;
+//Implement file upload functionality
+window.onload = function() {
+		var fileInput = document.getElementById('input');
+        
+		fileInput.addEventListener('change', function(e) {
+			var file = fileInput.files[0];
+            var reader = new FileReader();
+            
+            reader.onload = (function (theFile) {
+			return function (e) {
+				console.log('e readAsText = ', e);
+				console.log('e readAsText target = ', e.target);
+				try {
+					json = JSON.parse(e.target.result);
+					
+				} catch (ex) {
+					alert('ex when trying to parse json = ' + ex);
+				}
+			}
+		})(file);
+		reader.readAsText(file);
+       
+        });
+    
+   
+ }    
+
+function show(){
+    
+    document.getElementById("rightContainer").innerHTML = "";
+    display(json,2);
+}       
+</script>
+
+</head>
+<body>
+<nav class="navbar navbar-default navbar-fixed-top" id="headerContainer">
+      <div class="container">
+        <div class="navbar-header">
+          <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar" aria-expanded="false" aria-controls="navbar">
+            <span class="sr-only">Toggle navigation</span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+          </button>
+          <a class="navbar-brand" style="color:white;">Data Analysis for Facebook</a>
+        </div>
+        <div id="navbar" class="navbar-collapse collapse">
+          <ul class="nav navbar-nav navbar-right">
+            <li><fb:login-button size="large" autologoutlink="true" scope="public_profile,email,user_friends" onlogin="checkLoginState();">
+                </fb:login-button></li>
+          </ul>
+        </div><!--/.nav-collapse -->
+      </div>
+    </nav>
+<div id="firstButton">
+<button type="button" class="btn btn-success" onclick="getData()">Show me!</button>    
+</div>
+<div id="leftContainer">
+<svg id="graph">
+     <defs>
+      <clipPath id="clip">
+          <circle cx="0" cy="0" r="20"/>
+      </clipPath>
+  </defs>
+</svg>
+</div>
+<div id="upload">
+Select the file to upload:
+<input type="file" id="input"><br><button id="show" type="button" class="btn btn-success" onclick="show()">Show me!</button>
+</div>
+<div id="rightContainer">
+</div>
+</body>
+</html>
